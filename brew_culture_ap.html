@@ -868,7 +868,36 @@ function classifyPayment(pt){
 function parseCloverXLSX(ab){
   var wb = XLSX.read(ab, {type:'array', cellDates:true});
   var ws = wb.Sheets[wb.SheetNames[0]];
-  var rows = XLSX.utils.sheet_to_json(ws, {raw:false, defval:''});
+  var rows = XLSX.utils.sheet_to_json(ws, {raw:true, defval:''});
+
+  // Robust date -> YYYY-MM-DD from any SheetJS format
+  function extractDate(val){
+    if(!val && val !== 0) return '';
+    // SheetJS Date object (cellDates:true + raw:true)
+    if(val instanceof Date){
+      var y = val.getUTCFullYear();
+      var m = String(val.getUTCMonth()+1).padStart(2,'0');
+      var d = String(val.getUTCDate()).padStart(2,'0');
+      return y + '-' + m + '-' + d;
+    }
+    // Already ISO string
+    if(typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}/)){
+      return val.slice(0,10);
+    }
+    // Excel serial number
+    if(typeof val === 'number'){
+      return excelDateToStr(val);
+    }
+    // Locale string e.g. "6/16/2026" or "06/16/2026"
+    if(typeof val === 'string'){
+      var parts = val.split('/');
+      if(parts.length === 3){
+        var yr = parts[2].length === 4 ? parts[2] : '20'+parts[2];
+        return yr + '-' + String(parts[0]).padStart(2,'0') + '-' + String(parts[1]).padStart(2,'0');
+      }
+    }
+    return '';
+  }
 
   // --- Build order-level map (for tip/tax/payment dedup) ---
   var orderMap = {};
@@ -876,14 +905,7 @@ function parseCloverXLSX(ab){
     var oid = r['order'];
     if(!oid) return;
     if(!orderMap[oid]){
-      var dt = r['date'];
-      var dateStr = '';
-      if(dt instanceof Date){ dateStr = dt.toISOString().slice(0,10); }
-      else if(typeof dt === 'string' && dt.match(/\d{4}-\d{2}-\d{2}/)){
-        dateStr = dt.slice(0,10);
-      } else if(dt && !isNaN(Number(dt))){
-        dateStr = excelDateToStr(Number(dt));
-      } else { dateStr = String(dt||'').slice(0,10); }
+      var dateStr = extractDate(r['date']);
 
       orderMap[oid] = {
         date: dateStr,
@@ -899,8 +921,8 @@ function parseCloverXLSX(ab){
       };
     }
     var itemName = normaliseItemName(r['item_name']);
-    var isRevenue = String(r['is_revenue']).toLowerCase();
-    var refunded  = String(r['refunded']).toLowerCase();
+    var isRevenue = r['is_revenue'] === true || String(r['is_revenue']).toLowerCase() === 'true';
+    var refunded  = r['refunded']   === true || String(r['refunded']).toLowerCase()   === 'true';
     orderMap[oid].items.push({
       item_name:    itemName,
       category:     r['category'] || '',
@@ -911,8 +933,8 @@ function parseCloverXLSX(ab){
       item_tax:     parseFloat(r['item_tax_amount']) || 0,
       item_disc:    parseFloat(r['item_total_discount']) || 0,
       item_mod_amt: parseFloat(r['item_modifications_amount']) || 0,
-      is_revenue:   isRevenue === 'true' || isRevenue === '1',
-      refunded:     refunded  === 'true' || refunded  === '1'
+      is_revenue:   isRevenue,
+      refunded:     refunded
     });
   });
 
@@ -3885,10 +3907,5 @@ function showToast(msg){
 </body>
 </html>
  
-
-
-
-
-
 
 
