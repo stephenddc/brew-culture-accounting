@@ -914,8 +914,10 @@ function parseCloverXLSX(ab){
         tip: parseFloat(r['Order_Tip_Amount']) || 0,
         tax: parseFloat(r['Order_Tax']) || 0,
         order_net: parseFloat(r['Order_Net']) || 0,
+        order_gross: parseFloat(r['Order_Gross']) || 0,
         amount_collected: parseFloat(r['Order_Amount_collected']) || 0,
         discount: parseFloat(r['Order_Total_Discount']) || 0,
+        refund: parseFloat(r['Order_Total_Refund']) || 0,
         discount_names: r['Order_discount_names'] || '',
         items: []
       };
@@ -948,21 +950,25 @@ function parseCloverXLSX(ab){
       dayMap[d] = {
         date: d,
         orders: [],
-        gross_net: 0,   // sum of Order_Net (pre-tax revenue)
+        gross_net: 0,
+        gross_before_disc: 0,
         tax: 0,
         tips: 0,
         cash_net: 0,
         card_net: 0,
         discounts: 0,
+        refunds: 0,
         item_lines: []
       };
     }
     var day = dayMap[d];
     day.orders.push(oid);
-    day.gross_net  += o.order_net;
-    day.tax        += o.tax;
-    day.tips       += o.tip;
-    day.discounts  += o.discount;
+    day.gross_net        += o.order_net;
+    day.gross_before_disc+= o.order_gross;
+    day.tax              += o.tax;
+    day.tips             += o.tip;
+    day.discounts        += o.discount;
+    day.refunds          += o.refund;
     var ch = classifyPayment(o.payment_type);
     if(ch === 'cash') day.cash_net += o.order_net;
     else              day.card_net += o.order_net;
@@ -972,12 +978,14 @@ function parseCloverXLSX(ab){
   // Round aggregates
   Object.keys(dayMap).forEach(function(d){
     var day = dayMap[d];
-    day.gross_net = Math.round(day.gross_net * 100) / 100;
-    day.tax       = Math.round(day.tax       * 100) / 100;
-    day.tips      = Math.round(day.tips      * 100) / 100;
-    day.cash_net  = Math.round(day.cash_net  * 100) / 100;
-    day.card_net  = Math.round(day.card_net  * 100) / 100;
-    day.discounts = Math.round(day.discounts * 100) / 100;
+    day.gross_net        = Math.round(day.gross_net        * 100) / 100;
+    day.gross_before_disc= Math.round(day.gross_before_disc* 100) / 100;
+    day.tax              = Math.round(day.tax              * 100) / 100;
+    day.tips             = Math.round(day.tips             * 100) / 100;
+    day.cash_net         = Math.round(day.cash_net         * 100) / 100;
+    day.card_net         = Math.round(day.card_net         * 100) / 100;
+    day.discounts        = Math.round(day.discounts        * 100) / 100;
+    day.refunds          = Math.round(day.refunds          * 100) / 100;
     day.order_count = day.orders.length;
     day.item_count  = day.item_lines.length;
   });
@@ -991,11 +999,13 @@ function buildSettlement(dayData){
     id: 'SETTLE-' + dayData.date,
     date: dayData.date,
     gross_net: dayData.gross_net,
+    gross_before_disc: dayData.gross_before_disc,
     tax: dayData.tax,
     tips: dayData.tips,
     cash_net: dayData.cash_net,
     card_net: dayData.card_net,
     discounts: dayData.discounts,
+    refunds: dayData.refunds,
     order_count: dayData.order_count,
     item_count: dayData.item_count,
     deposit_status: 'pending',
@@ -1012,11 +1022,13 @@ async function saveSettlementToSB(s){
     id: s.id,
     settlement_date: s.date,
     gross_net: s.gross_net,
+    gross_before_disc: s.gross_before_disc || s.gross_net,
     tax: s.tax,
     tips: s.tips,
     cash_net: s.cash_net,
     card_net: s.card_net,
     discounts: s.discounts,
+    refunds: s.refunds || 0,
     order_count: s.order_count,
     item_count: s.item_count,
     deposit_status: s.deposit_status,
@@ -1037,9 +1049,12 @@ async function loadRevData(){
     REV.settlements = res.data.map(function(r){
       return {
         id: r.id, date: r.settlement_date,
-        gross_net: r.gross_net, tax: r.tax, tips: r.tips,
+        gross_net: r.gross_net,
+        gross_before_disc: r.gross_before_disc || r.gross_net,
+        tax: r.tax, tips: r.tips,
         cash_net: r.cash_net, card_net: r.card_net,
         discounts: r.discounts || 0,
+        refunds: r.refunds || 0,
         order_count: r.order_count, item_count: r.item_count,
         deposit_status: r.deposit_status || 'pending',
         deposit_date: r.deposit_date, deposit_amount: r.deposit_amount,
@@ -1155,29 +1170,53 @@ function renderCloverPreview(dayMap){
     var dup = existing[d];
     var rowCls = dup ? 'parse-row-warn' : 'parse-row-match';
     var dupNote = dup ? ' <span style="color:#9B6A10;font-size:11px">(already imported \u2014 will overwrite)</span>' : '';
+    var discCell = day.discounts > 0
+      ? '<span style="color:var(--red)">' + fmt(day.discounts) + '</span>'
+      : '<span style="color:var(--ink-lo)">\u2014</span>';
+    var refCell = day.refunds > 0
+      ? '<span style="color:var(--red)">' + fmt(day.refunds) + '</span>'
+      : '<span style="color:var(--ink-lo)">\u2014</span>';
     return '<tr class="' + rowCls + '">' +
       '<td>' + fmtDate(d) + dupNote + '</td>' +
-      '<td class="text-right mono">' + fmt(day.gross_net) + '</td>' +
+      '<td class="text-right mono">' + fmt(day.gross_before_disc) + '</td>' +
+      '<td class="text-right mono">' + discCell + '</td>' +
+      '<td class="text-right mono">' + refCell + '</td>' +
+      '<td class="text-right mono fw600">' + fmt(day.gross_net) + '</td>' +
       '<td class="text-right mono">' + fmt(day.tax) + '</td>' +
       '<td class="text-right mono">' + fmt(day.tips) + '</td>' +
       '<td class="text-right mono">' + fmt(day.cash_net) + '</td>' +
       '<td class="text-right mono">' + fmt(day.card_net) + '</td>' +
       '<td class="text-right mono">' + day.order_count + '</td>' +
-      '<td class="text-right mono">' + day.item_count + '</td>' +
     '</tr>';
   }).join('');
 
-  var totalNet = dates.reduce(function(a,d){ return a + dayMap[d].gross_net; }, 0);
-  var totalTax = dates.reduce(function(a,d){ return a + dayMap[d].tax; }, 0);
-  var totalTips = dates.reduce(function(a,d){ return a + dayMap[d].tips; }, 0);
+  var totalGross  = dates.reduce(function(a,d){ return a + dayMap[d].gross_before_disc; }, 0);
+  var totalDisc   = dates.reduce(function(a,d){ return a + dayMap[d].discounts; }, 0);
+  var totalRef    = dates.reduce(function(a,d){ return a + dayMap[d].refunds; }, 0);
+  var totalNet    = dates.reduce(function(a,d){ return a + dayMap[d].gross_net; }, 0);
+  var totalTax    = dates.reduce(function(a,d){ return a + dayMap[d].tax; }, 0);
+  var totalTips   = dates.reduce(function(a,d){ return a + dayMap[d].tips; }, 0);
+
+  var discNote = totalDisc > 0 ? ', <strong>' + fmt(totalDisc) + ' discounts</strong>' : '';
+  var refNote  = totalRef  > 0 ? ', <strong>' + fmt(totalRef)  + ' refunds</strong>'   : '';
 
   resultEl.innerHTML =
-    '<div class="alert alert-inv" style="margin-bottom:12px">Found ' + dates.length + ' day(s) \u2014 ' + fmt(totalNet) + ' net revenue, ' + fmt(totalTax) + ' tax, ' + fmt(totalTips) + ' tips. Review below then confirm import.</div>' +
+    '<div class="alert alert-inv" style="margin-bottom:12px">Found ' + dates.length + ' day(s) \u2014 ' +
+      '<strong>' + fmt(totalNet) + '</strong> net revenue' + discNote + refNote +
+      ', ' + fmt(totalTax) + ' tax, ' + fmt(totalTips) + ' tips. Review below then confirm import.' +
+    '</div>' +
     '<div class="parse-table-wrap">' +
       '<table><thead><tr>' +
-        '<th>Date</th><th class="text-right">Net Rev</th><th class="text-right">Tax</th>' +
-        '<th class="text-right">Tips</th><th class="text-right">Cash</th>' +
-        '<th class="text-right">Card</th><th class="text-right">Orders</th><th class="text-right">Items</th>' +
+        '<th>Date</th>' +
+        '<th class="text-right">Gross</th>' +
+        '<th class="text-right">Discounts</th>' +
+        '<th class="text-right">Refunds</th>' +
+        '<th class="text-right">Net Rev</th>' +
+        '<th class="text-right">Tax</th>' +
+        '<th class="text-right">Tips</th>' +
+        '<th class="text-right">Cash</th>' +
+        '<th class="text-right">Card</th>' +
+        '<th class="text-right">Orders</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '</div>' +
     '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">' +
