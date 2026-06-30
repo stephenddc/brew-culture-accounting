@@ -171,7 +171,7 @@
   .mod-logo{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin-bottom:8px}
   .mod-title{font-size:26px;font-weight:700;margin-bottom:6px}
   .mod-sub{font-size:14px;color:var(--ink-mid)}
-  .mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;max-width:560px}
+  .mod-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;width:100%;max-width:780px}
   .mod-card{background:var(--surface);border:2px solid var(--border);border-radius:8px;padding:28px 24px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .12s;text-align:left}
   .mod-card:hover{border-color:var(--amber);box-shadow:0 4px 20px rgba(200,121,65,.15);transform:translateY(-2px)}
   .mod-card.mod-card-revenue:hover{border-color:var(--green);box-shadow:0 4px 20px rgba(45,107,74,.15)}
@@ -180,6 +180,8 @@
   .mod-card-sub{font-size:12px;color:var(--ink-mid);line-height:1.5}
   .mod-card-badge{display:inline-block;margin-top:10px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--amber-lo);color:var(--amber)}
   .mod-card-badge.green{background:var(--green-lo);color:var(--green)}
+  .mod-card-badge.blue{background:#E8F0FB;color:#2D5BA8}
+  .mod-card.mod-card-ledger:hover{border-color:#2D5BA8;box-shadow:0 4px 20px rgba(45,91,168,.15)}
   .mod-user-bar{position:absolute;top:16px;right:24px;display:flex;align-items:center;gap:12px;font-size:12px;color:var(--ink-mid)}
   /* Module header bar (inside main-app, above topbar) */
   .mod-bar{background:var(--accent);color:rgba(255,255,255,.7);font-size:12px;padding:0 20px;height:34px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
@@ -285,6 +287,12 @@
       <div class="mod-card-sub">Vendors, invoices, payments, GL entries, FIFO inventory, and recipes.</div>
       <div class="mod-card-badge">AP Module</div>
     </div>
+    <div class="mod-card mod-card-ledger" onclick="launchModule('ledger')">
+      <div class="mod-icon">&#8942;</div>
+      <div class="mod-card-title">Bank Ledger</div>
+      <div class="mod-card-sub">Glacier &amp; SouthState transactions, reconciled against AP and Revenue.</div>
+      <div class="mod-card-badge blue">Reconciliation</div>
+    </div>
   </div>
   <div style="margin-top:28px">
     <button onclick="doSignOut()" style="background:none;border:1px solid var(--border);border-radius:var(--r);padding:8px 20px;font-size:13px;color:var(--ink-mid);cursor:pointer;font-family:inherit;transition:border-color .15s,color .15s" onmouseover="this.style.color='var(--ink)';this.style.borderColor='var(--ink-mid)'" onmouseout="this.style.color='var(--ink-mid)';this.style.borderColor='var(--border)'">Sign out</button>
@@ -307,6 +315,7 @@
   <nav class="sidebar" id="sidebar-root"></nav>
   <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importData(this)">
   <input type="file" id="clover-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleCloverFile(this)">
+  <input type="file" id="ledger-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleLedgerFile(this)">
   <div class="main">
     <div class="topbar">
       <div>
@@ -760,7 +769,19 @@ let _dataLoaded = false;
 function renderSidebar(){
   var el = document.getElementById('sidebar-root');
   if(!el) return;
-  if(currentModule === 'revenue'){
+  if(currentModule === 'ledger'){
+    el.innerHTML =
+      '<div class="sidebar-header">' +
+        '<div class="sidebar-logo">Brew Culture</div>' +
+        '<div class="sidebar-title">Bank Ledger</div>' +
+        '<div class="sidebar-sub">Glacier \xb7 SouthState \xb7 Reconciliation</div>' +
+      '</div>' +
+      '<div class="sidebar-section">Ledger</div>' +
+      '<button class="nav-item active" onclick="showView(\'bank-ledger\')" id="nav-bank-ledger"><span class="nav-icon">&#8942;</span> Transactions</button>' +
+      '<div class="sidebar-section">Jump To</div>' +
+      '<button class="nav-item" onclick="launchModule(\'ap\')"><span class="nav-icon">&#9632;</span> AP Module</button>' +
+      '<button class="nav-item" onclick="launchModule(\'revenue\')"><span class="nav-icon">&#9650;</span> Revenue Module</button>';
+  } else if(currentModule === 'revenue'){
     var s = revSidebarStats();
     el.innerHTML =
       '<div class="sidebar-header">' +
@@ -773,7 +794,8 @@ function renderSidebar(){
       '<button class="nav-item" onclick="showView(\'rev-import\')" id="nav-rev-import"><span class="nav-icon">&#8593;</span> Clover Import</button>' +
       '<button class="nav-item" onclick="showView(\'rev-settlement\')" id="nav-rev-settlement"><span class="nav-icon">&#9632;</span> Settlement Log</button>' +
       '<button class="nav-item" onclick="showView(\'rev-cash\')" id="nav-rev-cash"><span class="nav-icon">&#9679;</span> Cash Log</button>' +
-      '<button class="nav-item" onclick="showView(\'bank-ledger\')" id="nav-bank-ledger"><span class="nav-icon">&#8942;</span> Bank Ledger</button>' +
+      '<div class="sidebar-section">Reconciliation</div>' +
+      '<button class="nav-item" onclick="launchModule(\'ledger\')"><span class="nav-icon">&#8942;</span> Bank Ledger</button>' +
       '<div class="sidebar-section">Data</div>' +
       '<button class="nav-item" onclick="exportData()"><span class="nav-icon">&#8595;</span> Export Backup</button>' +
       '<div class="rev-sidebar-stats">' +
@@ -809,6 +831,8 @@ function renderSidebar(){
       '<button class="nav-item" onclick="showView(\'pastry-close\')" id="nav-pastry-close"><span class="nav-icon">&#9633;</span> Daily Close</button>' +
       '<button class="nav-item" onclick="showView(\'pastry-tracker\')" id="nav-pastry-tracker"><span class="nav-icon">&#9650;</span> Variance Tracker</button>' +
       '<button class="nav-item" onclick="showView(\'pastry-skus\')" id="nav-pastry-skus"><span class="nav-icon">&#8801;</span> Pastry SKUs</button>' +
+      '<div class="sidebar-section">Reconciliation</div>' +
+      '<button class="nav-item" onclick="launchModule(\'ledger\')"><span class="nav-icon">&#8942;</span> Bank Ledger</button>' +
       '<div class="sidebar-section">Data</div>' +
       '<button class="nav-item" onclick="exportData()"><span class="nav-icon">&#8595;</span> Export Backup</button>' +
       '<button class="nav-item" onclick="triggerImport()"><span class="nav-icon">&#8593;</span> Restore Backup</button>' +
@@ -828,7 +852,7 @@ async function launchModule(mod){
   currentModule = mod;
   document.getElementById('module-switcher').style.display = 'none';
   document.getElementById('main-app').style.display = 'flex';
-  var labels = {ap:'Accounts Payable', revenue:'Revenue'};
+  var labels = {ap:'Accounts Payable', revenue:'Revenue', ledger:'Bank Ledger'};
   document.getElementById('mod-bar-name').textContent = labels[mod] || mod;
   var email = _session && _session.user ? _session.user.email : '';
   document.getElementById('mod-bar-user').textContent = email;
@@ -842,6 +866,8 @@ async function launchModule(mod){
     showView('dashboard');
   } else if(mod === 'revenue'){
     showView('rev-dashboard');
+  } else if(mod === 'ledger'){
+    showView('bank-ledger');
   }
 }
 
@@ -3537,7 +3563,183 @@ async function runRebelBreadPastryExtraction(file, inv){
 // ═══════════════════════════════════════════════
 // BANK LEDGER MODULE
 // ═══════════════════════════════════════════════
-var BL_BANKS       = ['SouthState Bank','Glacier Bank'];
+// ═══════════════════════════════════════════════
+// BANK LEDGER — FILE UPLOAD / PARSE
+// ═══════════════════════════════════════════════
+var _ledgerParsed = null;
+
+function handleLedgerFile(input){
+  if(input.files && input.files[0]) processLedgerFile(input.files[0]);
+  input.value = '';
+}
+
+function excelSerialToISO(serial){
+  var d = new Date(Math.round((serial - 25569) * 86400 * 1000));
+  return d.toISOString().slice(0,10);
+}
+
+function ledgerDateToISO(val){
+  if(val === null || val === undefined || val === '') return '';
+  if(val instanceof Date){
+    var y=val.getUTCFullYear(), m=String(val.getUTCMonth()+1).padStart(2,'0'), d=String(val.getUTCDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
+  if(typeof val === 'number') return excelSerialToISO(val);
+  if(typeof val === 'string'){
+    if(val.match(/^\d{4}-\d{2}-\d{2}/)) return val.slice(0,10);
+    var parts = val.split('/');
+    if(parts.length === 3){
+      var yr = parts[2].length === 4 ? parts[2] : '20'+parts[2];
+      return yr + '-' + String(parts[0]).padStart(2,'0') + '-' + String(parts[1]).padStart(2,'0');
+    }
+  }
+  return '';
+}
+
+function processLedgerFile(file){
+  showLoadingOverlay('Reading ledger file...');
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      var ws = wb.Sheets['Bank Ledger'] || wb.Sheets[wb.SheetNames[0]];
+      // The exported ledger has a 3-row banner before the real header (title, subtitle, header row)
+      var rows = XLSX.utils.sheet_to_json(ws, {raw:true, defval:'', range:2});
+
+      var parsed = rows.map(function(r){
+        var dateVal = r['Payment Date'];
+        var dateISO = ledgerDateToISO(dateVal);
+        if(!dateISO) return null;
+        var transType = String(r['Trans Type']||'').trim();
+        var grossRaw = parseFloat(r['Gross Amount']);
+        if(isNaN(grossRaw)) return null;
+        return {
+          row_id: parseInt(r['Row ID'],10) || 0,
+          pmnt_date: dateISO,
+          customer_vendor: String(r['Customer / Vendor']||'').trim(),
+          description: String(r['Description']||'').trim(),
+          era: 'dc', // default; pre-transfer rows reclassified manually after import
+          stmt_type: String(r['Statement Type']||'').trim(),
+          stmt_sec: String(r['Statement Sec']||'').trim(),
+          stmt_category: String(r['Statement Category']||'').trim(),
+          account: String(r['Account']||'').trim(),
+          note: '',
+          ck_num: String(r['Ck #']||'').trim(),
+          trans_type: transType === 'Credit' ? 'Credit' : 'Debit',
+          gross_amount: grossRaw,
+          bank: String(r['Bank']||'').trim()
+        };
+      }).filter(Boolean);
+
+      hideLoadingOverlay();
+      if(parsed.length === 0){
+        showToast('No valid rows found in file', 'warn');
+        return;
+      }
+      _ledgerParsed = parsed;
+      renderLedgerUploadPreview(parsed);
+    } catch(err){
+      hideLoadingOverlay();
+      showToast('Parse error: ' + err.message, 'warn');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderLedgerUploadPreview(parsed){
+  var existingIds = {};
+  REV.bankLedger.forEach(function(r){ existingIds[r.row_id] = true; });
+  var newCount = parsed.filter(function(r){ return !existingIds[r.row_id]; }).length;
+  var dupCount = parsed.length - newCount;
+
+  var totalCredit = parsed.reduce(function(s,r){ return s + (r.trans_type==='Credit' ? r.gross_amount : 0); }, 0);
+  var totalDebit  = parsed.reduce(function(s,r){ return s + (r.trans_type==='Debit'  ? Math.abs(r.gross_amount) : 0); }, 0);
+  var dateMin = parsed.reduce(function(m,r){ return !m || r.pmnt_date < m ? r.pmnt_date : m; }, null);
+  var dateMax = parsed.reduce(function(m,r){ return !m || r.pmnt_date > m ? r.pmnt_date : m; }, null);
+
+  openModal(
+    '<div class="modal" style="max-width:620px">' +
+      '<div class="modal-header">' +
+        '<div><div class="modal-title">Confirm Ledger Import</div>' +
+        '<div class="modal-sub">' + fmtDate(dateMin) + ' \u2014 ' + fmtDate(dateMax) + '</div></div>' +
+        '<button class="close-btn" onclick="closeModal()">&#215;</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div class="alert alert-inv" style="margin-bottom:12px">' +
+          'Found <strong>' + parsed.length + '</strong> rows \u2014 ' +
+          '<strong>' + newCount + ' new</strong>' + (dupCount>0 ? ', <strong>' + dupCount + ' already imported (will overwrite by Row ID)</strong>' : '') +
+        '</div>' +
+        '<div class="match-summary-bar">' +
+          '<span>Total Credits: <strong class="mono" style="color:var(--green)">' + fmt(totalCredit) + '</strong></span>' +
+          '<span>Total Debits: <strong class="mono" style="color:var(--red)">' + fmt(totalDebit) + '</strong></span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--ink-mid);margin-top:12px">' +
+          'All rows default to <strong>Dream Center</strong> era. Reclassify pre-transfer rows individually after import using the edit (pencil) button.' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-ghost" onclick="_ledgerParsed=null;closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="confirmLedgerImport()">&#10003; Import ' + parsed.length + ' Rows</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function confirmLedgerImport(){
+  if(!_ledgerParsed) return;
+  var rows = _ledgerParsed;
+  closeModal();
+  showLoadingOverlay('Importing 0 / ' + rows.length + '...');
+
+  var existingByRowId = {};
+  REV.bankLedger.forEach(function(r){ existingByRowId[r.row_id] = r; });
+
+  var toUpsert = rows.map(function(r){
+    var existing = existingByRowId[r.row_id];
+    return {
+      id: existing ? existing.id : ('BL-IMPORT-' + r.row_id),
+      row_id: r.row_id,
+      pmnt_date: r.pmnt_date,
+      bank: r.bank,
+      customer_vendor: r.customer_vendor,
+      description: r.description,
+      era: existing ? existing.era : r.era,
+      note: existing ? existing.note : r.note,
+      stmt_type: r.stmt_type,
+      stmt_sec: r.stmt_sec,
+      stmt_category: r.stmt_category,
+      account: r.account,
+      ck_num: r.ck_num,
+      trans_type: r.trans_type,
+      gross_amount: r.gross_amount
+    };
+  });
+
+  // Batch upsert in chunks of 100 to stay well under request size limits
+  var CHUNK = 100;
+  var errors = 0;
+  for(var i = 0; i < toUpsert.length; i += CHUNK){
+    var chunk = toUpsert.slice(i, i + CHUNK);
+    var res = await _sb.from('bank_ledger').upsert(chunk, {onConflict:'id'});
+    if(res.error){ console.error('ledger import chunk error', res.error); errors++; }
+    showLoadingOverlay('Importing ' + Math.min(i+CHUNK, toUpsert.length) + ' / ' + toUpsert.length + '...');
+  }
+
+  await loadRevData();
+  hideLoadingOverlay();
+  _ledgerParsed = null;
+
+  if(errors > 0){
+    showToast('Import completed with ' + errors + ' chunk error(s) \u2014 check console', 'warn');
+  } else {
+    showToast('Imported ' + toUpsert.length + ' ledger rows');
+  }
+  renderSidebar();
+  if(currentView === 'bank-ledger') renderBankLedger();
+}
+
+
 var BL_TRANS_TYPES = ['Credit','Debit'];
 var BL_STMT_TYPES  = ['','P&L','Balance Sheet'];
 var BL_STMT_SEC    = ['','1 Revenue','2 Expense'];
@@ -3594,7 +3796,9 @@ async function deleteBankLedgerRow(id){
 }
 
 function renderBankLedger(){
-  $('topbar-actions').innerHTML = '<button class="btn btn-primary" onclick="openBankLedgerModal(null)">+ Add Transaction</button>';
+  $('topbar-actions').innerHTML =
+    '<button class="btn btn-secondary" onclick="$$(\'ledger-file-input\').click()">&#8593; Upload Ledger File</button>' +
+    '<button class="btn btn-primary" onclick="openBankLedgerModal(null)">+ Add Transaction</button>';
 
   var rows = computeLedgerBalances(REV.bankLedger);
 
